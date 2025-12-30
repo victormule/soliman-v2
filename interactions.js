@@ -1,5 +1,8 @@
 // interactions.js
 import * as THREE from 'three';
+
+const IS_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
 import { setPlaneSprite } from './scenePlanes.js';
 
 /**
@@ -367,17 +370,25 @@ export function handlePointerMove(event) {
   if (!dragging || !dragStep) return;
 
   const cfg = dragStep.config;
-  const pixelsForFull = cfg.dragPixelsForFull || 150;
+  const basePixelsForFull = cfg.dragPixelsForFull || 150;
+
+  // Sur mobile : il faut moins de distance pour parcourir toute la course
+  const pixelsForFull = IS_MOBILE ? basePixelsForFull * 0.6 : basePixelsForFull;
 
   const deltaPixels = dragStartY - event.clientY; // vers le haut = positif
   const deltaProgress = deltaPixels / pixelsForFull;
 
-  let newProgress = dragStartProgress + deltaProgress;
-  newProgress = Math.max(0, Math.min(1, newProgress));
+  // progress "cible" en fonction du mouvement global
+  let targetProgress = dragStartProgress + deltaProgress;
+  targetProgress = Math.max(0, Math.min(1, targetProgress));
 
-  dragStep.progress = newProgress;
+  // Lissage pour éviter les à-coups (surtout sur mobile où il y a moins d'événements)
+  const SMOOTH = IS_MOBILE ? 0.35 : 0.25;
+  dragStep.progress = THREE.MathUtils.lerp(dragStep.progress, targetProgress, SMOOTH);
+
   applyStepTransform(dragStep);
 }
+
 
 export function handlePointerUp() {
   if (!dragging || !dragStep) return;
@@ -499,3 +510,4 @@ export function updateInteractions(deltaMs) {
   // 3) mise à jour des sprites animés du perso actif
   updateStepAnimations();
 }
+
