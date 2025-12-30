@@ -1,0 +1,283 @@
+/* =========================
+   BASE
+   ========================= */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+/* =========================
+   CANVAS (renderer Three.js)
+   ========================= */
+
+canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh; /* valeur par défaut */
+  filter: blur(10px);
+  transition: filter 0.8s ease;
+}
+
+canvas.started {
+  filter: blur(0);
+}
+
+/* Sur navigateurs modernes (Android/Chrome, iOS récents),
+   100dvh = hauteur visible, sans la barre d'adresse */
+@supports (height: 100dvh) {
+  canvas {
+    height: 100dvh;
+  }
+}
+
+/* =========================
+   OVERLAY + BOUTON START
+   ========================= */
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 20;
+  transition: opacity 0.6s ease;
+}
+
+#startButton {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background: #ffffff;
+  color: #000000;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#startButton:hover {
+  transform: translateY(-2px);
+}
+
+/* =========================
+   PANEL UI GAUCHE
+   ========================= */
+
+#uiPanel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh; /* sera écrasé par 100dvh ci-dessous si dispo */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* occupe toute la hauteur */
+  padding: 3vh 1.8vw;
+  box-sizing: border-box;
+  gap: 2vh; /* ou 1vh, selon ton goût */
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+  font-family: system-ui, sans-serif;
+}
+
+@supports (height: 100dvh) {
+  #uiPanel {
+    height: 100dvh;
+  }
+}
+
+/* =========================
+   STYLE DES BOUTONS DU PANEL
+   ========================= */
+
+#uiPanel button {
+  position: relative;
+  width: 16vw;
+  min-width: 200px;
+  max-width: 340px;
+
+  /* on laisse exactement ta valeur d'origine */
+  height: clamp(100px, 6vh, 70px);
+  line-height: normal;
+
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+
+  border: 2px solid #ffffff;
+  border-radius: 6px;
+  background: rgba(255,255,255,0);
+  color: #ffffff;
+
+  font-size: clamp(0.7rem, 1vw, 1rem);
+  cursor: pointer;
+
+  overflow: hidden;
+  transition:
+    background 0.3s linear,
+    color 0.3s linear,
+    transform 0.2s ease,
+    box-shadow 0.3s ease;
+}
+
+/* Effet à l'intérieur */
+#uiPanel button span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* HOVER effet opacité */
+#uiPanel button:hover {
+  background: rgba(255,255,255,0.9);
+  color: #124a58;          /* couleur texte hover */
+  transform: translateX(4px);
+}
+
+/* BOUTON ACTIF (cliqué) */
+#uiPanel button.active {
+  transform: scale(1.04);
+  background: rgba(255,255,255,0.95);
+  color: #124a58;
+  box-shadow: 0 0 14px rgba(255,255,255,0.8);
+}
+
+/* =========================
+   AVERTISSEMENT MODE PAYSAGE
+   ========================= */
+
+.force-landscape-warning::before {
+  content: "Veuillez tourner votre téléphone en mode paysage";
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.9);
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+  padding: 2rem;
+  z-index: 9999;
+}
+
+/* =========================
+   BOUTON TOGGLE PLEIN ÉCRAN
+   ========================= */
+
+#fullscreenToggle {
+  position: fixed;
+  top: 0.8rem;
+  right: 0.8rem;
+  z-index: 30;
+
+  width: 46px;
+  height: 46px;
+  padding: 0;
+
+  display: none;              /* sera mis en display:flex en JS */
+  align-items: center;
+  justify-content: center;
+
+  /* carré avec léger arrondi */
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+
+  /* fond parfaitement transparent au repos */
+  background: transparent;
+  cursor: pointer;
+
+  /* couleur de base = blanc, utilisée par les corners via currentColor */
+  color: #ffffff;
+
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.15s ease,
+    color 0.2s ease;
+}
+
+/* HOVER : fond blanc + légère lueur + corners couleur titres (#124a58) */
+#fullscreenToggle:hover {
+  background: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.7);
+  color: #124a58; /* les .fs-corner suivent grâce à currentColor */
+}
+
+/* Conteneur des 4 angles */
+#fullscreenToggle .fs-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+
+  border-style: solid;
+  border-color: currentColor;   /* utilise la couleur du bouton */
+  border-width: 0;              /* défini dans chaque variante */
+
+  /* chaque corner tourne sur lui-même */
+  transform-origin: 50% 50%;
+  transform: rotate(180deg);    /* état NORMAL : pointe vers l'intérieur */
+  transition: transform 1s ease;
+}
+
+/* Placement + forme des 4 corners */
+
+/* haut gauche */
+#fullscreenToggle .fs-corner.fs-tl {
+  top: 7px;
+  left: 7px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+  border-radius: 3px 0 0 0;
+}
+
+/* haut droite */
+#fullscreenToggle .fs-corner.fs-tr {
+  top: 7px;
+  right: 7px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+  border-radius: 0 3px 0 0;
+}
+
+/* bas gauche */
+#fullscreenToggle .fs-corner.fs-bl {
+  bottom: 7px;
+  left: 7px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+  border-radius: 0 0 0 3px;
+}
+
+/* bas droite */
+#fullscreenToggle .fs-corner.fs-br {
+  bottom: 7px;
+  right: 7px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+  border-radius: 0 0 3px 0;
+}
+
+/* ÉTAT PLEIN ÉCRAN : les 4 corners pivotent chacun de 180°
+   pour pointer vers l'extérieur (icône fullscreen classique) */
+#fullscreenToggle.fs-active .fs-corner {
+  transform: rotate(0deg);
+}
+
+/* petit effet de clic / état actif global */
+#fullscreenToggle.fs-active {
+  transform: scale(0.98);
+}

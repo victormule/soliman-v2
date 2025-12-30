@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Soliman</title>
+
+      <!-- mobile -->
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
+  
+  <!-- CSS externe -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Importmap Three.js -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
+      "GLTFLoader": "https://unpkg.com/three@0.155.0/examples/jsm/loaders/GLTFLoader.js",
+      "OrbitControls": "https://unpkg.com/three@0.155.0/examples/jsm/controls/OrbitControls.js",
+      "Sky": "https://unpkg.com/three@0.155.0/examples/jsm/objects/Sky.js"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <div id="overlay">
+    <button id="startButton">Start</button>
+  </div>
+
+  <!-- PANEL UI GAUCHE (caché au début) -->
+  <div id="uiPanel">
+    <button id="btn-elhalaby"><span>Soleyman el-Halaby</span></button>
+    <button id="btn-assassin"><span>L'assassin fanatique</span></button>
+    <button id="btn-martyr"><span>Le martyr</span></button>
+    <button id="btn-hero"><span>Le héros</span></button>
+    <button id="btn-body"><span>Le corps</span></button>
+    <button id="btn-human"><span>Reste humain</span></button>
+    <button id="btn-museum"><span>Corps muséalisé</span></button>
+  </div>
+
+  <!-- JS principal -->
+  <script type="module" src="main.js"></script>
+</body>
+</html>
