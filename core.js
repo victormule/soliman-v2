@@ -26,7 +26,7 @@ export function initCore() {
 
   // on mémorise les deux distances pour pouvoir les réutiliser côté UI
   const defaultTargetZ = targetPosition.z;                 // 16.5 ou 17.5
-  const zoomedTargetZ  = isMobile ? 16.0 : 17.1;           // 16.0 ou 17.0
+  const zoomedTargetZ  = isMobile ? 15.5 : 17.1;           // 16.0 ou 17.0
 
 
   camera.position.copy(startPosition);
@@ -263,4 +263,5 @@ export function updateCameraAndPlants(time, deltaMs, core, appState) {
     });
   }
 }
+
 
