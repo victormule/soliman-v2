@@ -22,6 +22,7 @@ canvas {
   height: 100vh; /* valeur par défaut */
   filter: blur(10px);
   transition: filter 0.8s ease;
+  touch-action: none; /* important pour les gestures sur mobile */
 }
 
 canvas.started {
@@ -281,3 +282,4 @@ canvas.started {
 #fullscreenToggle.fs-active {
   transform: scale(0.98);
 }
+
