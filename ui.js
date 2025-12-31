@@ -237,6 +237,10 @@ function applySelection(name) {
     showCharacter(name);
   }
 }
+  // permet au main.js de déclencher un changement de personnage
+  // au bon moment (fin de dézoom + fin de rembobinage)
+  appState.applySelectionForCamera = applySelection;
+
 
 
   // Preview au hover : personnages uniquement, pas de décor
@@ -296,23 +300,32 @@ function addClick(btn, name) {
     if (isSameButton) {
       // re-clic sur le même personnage :
       // on sort du mode "lock" → caméra en arrière
-      core.targetPosition.z      = defaultTargetZ;
-      appState.cameraSwitchPending = false;
-      appState.cameraSwitchTargetZ = null;
+      core.targetPosition.z           = defaultTargetZ;
+      appState.cameraSwitchPending    = false;
+      appState.cameraSwitchTargetZ    = null;
+      appState.cameraSwitchTargetCharacter = null;
+      appState.cameraSwitchZoomOutDone     = false;
+      appState.decorClosingDoneForSwitch   = false;
     } else {
       if (hadActive) {
         // on change de personnage :
         // 1) on demande un dézoom vers la position "loin"
-        core.targetPosition.z        = defaultTargetZ;
-        // 2) et on indique qu'après ce dézoom, il faudra re-zoomer
-        appState.cameraSwitchPending = true;
-        appState.cameraSwitchTargetZ = zoomedTargetZ;
+        core.targetPosition.z            = defaultTargetZ;
+        // 2) on prépare une transition "dézoom → (fin rembobinage) → re-zoom"
+        appState.cameraSwitchPending     = true;
+        appState.cameraSwitchTargetZ     = zoomedTargetZ;
+        appState.cameraSwitchTargetCharacter = name;
+        appState.cameraSwitchZoomOutDone     = false;
+        appState.decorClosingDoneForSwitch   = false;
       } else {
         // premier personnage sélectionné :
         // zoom direct
-        core.targetPosition.z        = zoomedTargetZ;
-        appState.cameraSwitchPending = false;
-        appState.cameraSwitchTargetZ = null;
+        core.targetPosition.z            = zoomedTargetZ;
+        appState.cameraSwitchPending     = false;
+        appState.cameraSwitchTargetZ     = null;
+        appState.cameraSwitchTargetCharacter = null;
+        appState.cameraSwitchZoomOutDone     = false;
+        appState.decorClosingDoneForSwitch   = false;
       }
     }
 
@@ -329,9 +342,8 @@ function addClick(btn, name) {
       // rembobinage du décor (interactions.js gère l'autoClosing sur null)
       setActiveCharacter(null);
 
-      // on NE cache PAS le personnage tout de suite :
-      // il restera visible tant que la souris est sur le bouton.
-      // Le mouseleave s'occupera de le cacher (logique de hover).
+      // le personnage reste visible tant que la souris est sur le bouton ;
+      // le mouseleave s'occupera de le cacher.
       return;
     }
 
@@ -344,11 +356,20 @@ function addClick(btn, name) {
     activeName   = name;
     btn.classList.add('active');
 
-    applySelection(name);
+    if (!hadActive) {
+      // 1er personnage choisi : on applique tout de suite
+      applySelection(name);
+    } else {
+      // changement de personnage :
+      // on lance seulement le rembobinage de l'ancien via interactions,
+      // le vrai changement (applySelection) sera déclenché plus tard
+      // par main.js quand :
+      //  - dézoom terminé
+      //  - rembobinage terminé
+      setActiveCharacter(name);
+    }
   });
 }
-
-
 
   // =========================
   //  ASSIGNATION DES BOUTONS
