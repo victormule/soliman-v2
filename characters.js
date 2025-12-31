@@ -393,3 +393,4 @@ export function updateBonesBird(deltaMs, isStarted) {
   // ---------- PHASE 3 : PAUSE ----------
   // On ne touche plus à rien → dernière frame + dernière position figée pendant 6s
 }
+
