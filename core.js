@@ -214,23 +214,23 @@ export function updateCameraAndPlants(time, deltaMs, core, appState) {
     if (appState.progress < 1) {
       // phase d'intro : on lerp entre start et target
       core.baseCamPos.lerpVectors(core.startPosition, core.targetPosition, appState.progress);
-    } else {
+      } else {
       // =========================
       //  MOUVEMENTS DE ZOOM APRÈS INTRO
       // =========================
       const smoothFactor = 0.05; // plus petit = zoom/dézoom plus lent
       core.baseCamPos.lerp(core.targetPosition, smoothFactor);
 
-      // si on a demandé "dézoom puis re-zoom" lors d'un changement de perso
-      if (appState.cameraSwitchPending) {
-        const dz = Math.abs(core.baseCamPos.z - core.targetPosition.z);
+      // si on est en phase de "switch de personnage" et qu'on dézoome
+      if (
+        appState.cameraSwitchPending &&
+        core.targetPosition.z === core.defaultTargetZ
+      ) {
+        const dz = Math.abs(core.baseCamPos.z - core.defaultTargetZ);
 
-        // on considère qu'on a fini le dézoom quand on est très proche de defaultTargetZ
-        if (dz < 0.2 && core.targetPosition.z === core.defaultTargetZ ) {
-          // on déclenche la phase "zoom in" vers zoomedTargetZ
-          core.targetPosition.z = appState.cameraSwitchTargetZ ?? core.zoomedTargetZ;
-          appState.cameraSwitchPending = false;
-          appState.cameraSwitchTargetZ = null;
+        // on considère le dézoom fini quand on est très proche de defaultTargetZ
+        if (dz < 0.08) {
+          appState.cameraSwitchZoomOutDone = true;
         }
       }
     }
@@ -263,6 +263,7 @@ export function updateCameraAndPlants(time, deltaMs, core, appState) {
     });
   }
 }
+
 
 
 
