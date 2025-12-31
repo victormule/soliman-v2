@@ -3,7 +3,7 @@ import * as THREE from 'three';
 
 const IS_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-import { setPlaneSprite } from './scenePlanes.js';
+import { setPlaneSprite, setPlaneSpriteFrame } from './scenePlanes.js';
 
 /**
  * Gestion des interactions décor <-> personnage pour les plantes / végétation.
@@ -29,9 +29,23 @@ const characterInteractionsConfig = {
   student: {
     sequence: [
       {
+        id: 'rideau',
+        type: 'curtain',           // <– nouveau type
+        dragPixelsForFull: 250,    // course horizontale (à ajuster)
+
+        staticSprite: 'images/rideau.png',    // image fixe quand inactif
+        staticFrames: 1,
+        staticFps: 0,
+
+        animSprite: 'images/spritesheetR.png', // spritesheet 17 frames
+        animFrames: 17,
+        animFps: 0,                             // ⚠️ pas d’anim automatique
+        endSprite: 'images/rideauEnd.png'      // quand rideau est “au bout”
+      },
+      {
         id: 'grasse1',
         type: 'pullUp',
-        maxOffset: 4,
+        maxOffset: 4.3,
         dragPixelsForFull: 150,
 
         staticSprite: 'images/grasse.png',
@@ -45,7 +59,7 @@ const characterInteractionsConfig = {
       {
         id: 'plante2',
         type: 'pullUp',
-        maxOffset: 4.0,
+        maxOffset: 4.1,
         dragPixelsForFull: 150,
 
         staticSprite: 'images/planteText.png',
@@ -87,6 +101,7 @@ let characterJustActivatedName = null;
 let dragging = false;
 let dragStep = null;
 let dragStartY = 0;
+let dragStartX = 0; 
 let dragStartProgress = 0;
 
 // Vitesse de fermeture auto (progress/seconde)
@@ -190,18 +205,30 @@ function setStepSprite(step, animated) {
 //  CHANGEMENT DE PERSONNAGE
 // =========================
 
+// =========================
+//  CHANGEMENT DE PERSONNAGE
+// =========================
+
 export function setActiveCharacter(charName) {
-  // CAS 1 : on demande "aucun personnage interactif"
+  // 0) Aucun changement demandé : on ne touche à rien
+  //    (important pour le cas applySelection() après un switch)
+  if (charName === activeCharacterName) {
+    return;
+  }
+
+  // 1) On désactive explicitement le décor interactif
+  //    (re-clic sur le même bouton → interactions OFF)
   if (!charName) {
-    // s'il n'y a déjà aucun personnage actif → reset direct (sécurité)
+    // s'il n'y a déjà aucun personnage actif → reset global (sécurité)
     if (!activeCharacterName) {
       Object.values(characterStates).forEach((state) => {
         state.steps.forEach((step) => {
           ensureStepMesh(step);
           step.progress = 0;
           step.isAnimated = false;
+          step.curtainRewindStarted = false;
           applyStepTransform(step);
-          setStepSprite(step, false); // image fixe, frame 1
+          setStepSprite(step, false); // image fixe (rideau.png pour le rideau)
         });
       });
 
@@ -213,28 +240,14 @@ export function setActiveCharacter(charName) {
       return;
     }
 
-    // sinon, il y a un personnage actif → on veut le REMBOBINER
-    const closingState = characterStates[activeCharacterName];
-    if (closingState) {
-      closingState.steps.forEach((step) => {
-        ensureStepMesh(step);
-        applyStepTransform(step);   // garde la position actuelle
-        setStepSprite(step, false); // on fige en image fixe
-        step.isAnimated = false;
-      });
-    }
-
-    // on lance le rembobinage AUTO du perso courant
+    // il y a un personnage actif → on lance le rembobinage de celui-ci
     autoClosing = true;
     autoClosingCharacterName = activeCharacterName;
-    pendingCharacterName = null; // ← pas de nouveau personnage à activer après
+    pendingCharacterName = null; // aucun nouveau perso à activer ensuite
     return;
   }
 
-  // CAS 2 : pas de changement de personnage
-  if (activeCharacterName === charName) return;
-
-  // CAS 3 : aucun perso actif avant → on active directement celui-ci
+  // 2) Aucun personnage actif → on active directement ce personnage
   if (!activeCharacterName) {
     activeCharacterName = charName;
     autoClosing = false;
@@ -244,21 +257,13 @@ export function setActiveCharacter(charName) {
     return;
   }
 
-  // CAS 4 : on passe d'un personnage A à un autre B
-  const closingState = characterStates[activeCharacterName];
-  if (closingState) {
-    closingState.steps.forEach((step) => {
-      ensureStepMesh(step);
-      applyStepTransform(step);
-      setStepSprite(step, false);
-      step.isAnimated = false;
-    });
-  }
-
+  // 3) On passe d'un personnage A (actif) à un autre B
+  //    → rembobinage de A, puis B sera activé quand tout est fermé
   autoClosing = true;
   autoClosingCharacterName = activeCharacterName;
-  pendingCharacterName = charName; // ← après rembobinage, on activera ce nouveau perso
+  pendingCharacterName = charName;
 }
+
 
 
 function isCharacterClosed(charName, epsilon = 0.01) {
@@ -309,6 +314,7 @@ function initSequenceForCharacter(charName) {
     ensureStepMesh(step);
     step.progress = 0;
     step.isAnimated = false;
+    step.curtainRewindStarted = false;
     applyStepTransform(step);
     setStepSprite(step, false); // tous statiques
   });
@@ -363,6 +369,7 @@ export function handlePointerDown(event) {
   dragging = true;
   dragStep = step;
   dragStartY = event.clientY;
+  dragStartX = event.clientX;
   dragStartProgress = step.progress;
 }
 
@@ -371,23 +378,35 @@ export function handlePointerMove(event) {
 
   const cfg = dragStep.config;
   const basePixelsForFull = cfg.dragPixelsForFull || 150;
-
-  // Sur mobile : il faut moins de distance pour parcourir toute la course
   const pixelsForFull = IS_MOBILE ? basePixelsForFull * 0.6 : basePixelsForFull;
 
-  const deltaPixels = dragStartY - event.clientY; // vers le haut = positif
-  const deltaProgress = deltaPixels / pixelsForFull;
+  let deltaProgress = 0;
 
-  // progress "cible" en fonction du mouvement global
+  if (cfg.type === 'curtain') {
+    // drag vers la droite = fermeture
+    const deltaPixels = event.clientX - dragStartX;
+    deltaProgress = deltaPixels / pixelsForFull;
+  } else {
+    // comportement actuel pour 'pullUp'
+    const deltaPixels = dragStartY - event.clientY; // vers le haut = +
+    deltaProgress = deltaPixels / pixelsForFull;
+  }
+
   let targetProgress = dragStartProgress + deltaProgress;
   targetProgress = Math.max(0, Math.min(1, targetProgress));
 
-  // Lissage pour éviter les à-coups (surtout sur mobile où il y a moins d'événements)
   const SMOOTH = IS_MOBILE ? 0.35 : 0.25;
   dragStep.progress = THREE.MathUtils.lerp(dragStep.progress, targetProgress, SMOOTH);
 
-  applyStepTransform(dragStep);
+  applyStepTransform(dragStep); // fera rien pour 'curtain' (voir 3.3)
+
+  // pour le rideau, on met à jour la frame de la spritesheet
+  if (cfg.type === 'curtain' && cfg.animFrames && dragStep.mesh) {
+    const frame = dragStep.progress * (cfg.animFrames - 1);
+    setPlaneSpriteFrame(dragStep.mesh, frame);
+  }
 }
+
 
 
 export function handlePointerUp() {
@@ -420,79 +439,162 @@ function applyStepTransform(step) {
 
   const mesh = step.mesh;
   const cfg = step.config;
-  const baseY = step.baseY;
-  const maxOffset = cfg.maxOffset || 0;
 
-  mesh.position.y = baseY + step.progress * maxOffset;
+  if (cfg.type === 'pullUp' || !cfg.type) {
+    const baseY = step.baseY;
+    const maxOffset = cfg.maxOffset || 0;
+    mesh.position.y = baseY + step.progress * maxOffset;
+  }
+  // type 'curtain' : pas de modification de position
 }
+
 
 // =========================
 //  ANIMATIONS DES SPRITES
 // =========================
-
 function updateStepAnimations() {
   if (!activeCharacterName) return;
 
-  // Si on est en train de rembobiner ce personnage, aucune anim
-  if (autoClosing && autoClosingCharacterName === activeCharacterName) {
-    const closingState = characterStates[activeCharacterName];
-    if (closingState) {
-      closingState.steps.forEach((step) => {
+  // 1) Cas rembobinage automatique du personnage actif
+if (autoClosing && autoClosingCharacterName === activeCharacterName) {
+  const closingState = characterStates[activeCharacterName];
+  if (closingState) {
+    closingState.steps.forEach((step) => {
+      const cfg = step.config;
+      if (cfg.type !== 'curtain') {
+        // les autres steps sont figés
         setStepSprite(step, false);
-      });
-    }
-    return;
+      }
+      // pour le rideau : NE RIEN FAIRE ici.
+      // sa texture/spritesheet est gérée dans updateInteractions
+    });
   }
+  return;
+}
 
+
+  // 2) Cas normal (pas de rembobinage)
   const state = characterStates[activeCharacterName];
   if (!state) return;
 
   const steps = state.steps;
-  if (!steps.length) return;
-
   const openable = getNextOpenableStep(steps);
 
   steps.forEach((step) => {
-    const shouldAnimate =
-      openable &&
-      step === openable &&
-      step.progress < 0.999; // si déjà (quasi) totalement ouvert → statique
+    const cfg = step.config;
 
-    setStepSprite(step, shouldAnimate);
+    if (step === openable) {
+      // Élément interactif courant
+      if (cfg.type === 'curtain') {
+        // Rideau : on passe sur la spritesheetR (fps=0, animé par le drag)
+        setStepSprite(step, true);
+      } else {
+        setStepSprite(step, true); // comportement actuel
+      }
+    } else {
+      // Pas l'élément actif
+      if (cfg.endSprite && step.progress >= 0.98) {
+        // Rideau complètement fermé → image finale rideauEnd
+        setPlaneSprite(step.mesh, cfg.endSprite, 1, 0);
+        step.isAnimated = false;
+      } else {
+        setStepSprite(step, false);
+      }
+    }
   });
 }
+
 
 // =========================
 //  AUTO CLOSE + UPDATE
 // =========================
 
-export function updateInteractions(deltaMs) {
+export function updateInteractions(deltaMs, appState) {
   const dt = deltaMs / 1000;
 
   // 1) fermeture auto quand on change de perso
-  if (autoClosing && autoClosingCharacterName) {
-    const state = characterStates[autoClosingCharacterName];
-    if (state) {
-      // on ferme un step à la fois : le dernier ouvert
-      const closingStep = getLastClosableStep(state.steps, 0.001);
-      if (closingStep && closingStep.progress > 0) {
-        closingStep.progress -= AUTO_CLOSE_SPEED * dt;
-        if (closingStep.progress < 0) closingStep.progress = 0;
-        applyStepTransform(closingStep);
-      }
+if (autoClosing && autoClosingCharacterName) {
+  const state = characterStates[autoClosingCharacterName];
+  if (state) {
+    const closingStep = getLastClosableStep(state.steps, 0.001);
+if (closingStep && closingStep.progress > 0) {
+  const cfg = closingStep.config;
+
+  if (cfg.type === 'curtain') {
+    // 1) Premier passage : on bascule la texture du rideau sur la spritesheet
+    //    en respectant sa progress actuelle
+    if (!closingStep.curtainRewindStarted) {
+      closingStep.curtainRewindStarted = true;
+
+      // passer sur spritesheetR
+      setPlaneSprite(
+        closingStep.mesh,
+        cfg.animSprite,
+        cfg.animFrames,
+        0 // fps=0 : pas d'anim auto
+      );
+
+      // placer directement la bonne frame (en général la dernière)
+      const startFrame = closingStep.progress * (cfg.animFrames - 1);
+      setPlaneSpriteFrame(closingStep.mesh, startFrame);
     }
+
+    // 2) Maintenant on décrémente la progress
+    closingStep.progress -= AUTO_CLOSE_SPEED * dt;
+    if (closingStep.progress < 0) closingStep.progress = 0;
+
+    // pas de déplacement en Y pour le rideau
+    // (si ton applyStepTransform gère déjà ce cas, tu peux le laisser)
+    applyStepTransform(closingStep);
+
+    // 3) Et on met la frame qui correspond à la nouvelle progress
+    if (cfg.animFrames && closingStep.mesh) {
+      const frame = closingStep.progress * (cfg.animFrames - 1);
+      setPlaneSpriteFrame(closingStep.mesh, frame);
+    }
+  } else {
+    // comportement actuel pour les autres steps (plantes)
+    closingStep.progress -= AUTO_CLOSE_SPEED * dt;
+    if (closingStep.progress < 0) closingStep.progress = 0;
+    applyStepTransform(closingStep);
+  }
+}
+
+  }
 
     // quand tout est fermé → on peut activer le nouveau personnage
     // quand tout est fermé → on termine le rembobinage
+    // quand tout est fermé → on peut activer le nouveau personnage
+    // quand tout est fermé → on termine le rembobinage
     if (!state || isCharacterClosed(autoClosingCharacterName)) {
+      // NEW : on remet tous les steps du perso fermé dans leur état de base
+      const closedState = characterStates[autoClosingCharacterName];
+      if (closedState) {
+        closedState.steps.forEach((step) => {
+          ensureStepMesh(step);
+          step.progress = 0;
+          applyStepTransform(step);
+          step.isAnimated = false;
+          // reviennent à leur staticSprite (rideau.png pour le rideau)
+          setStepSprite(step, false);
+        });
+      }
+
       autoClosing = false;
       autoClosingCharacterName = null;
+      
 
       if (pendingCharacterName) {
         // cas "changer de personnage" : on active le nouveau
         activeCharacterName = pendingCharacterName;
         pendingCharacterName = null;
         characterJustActivatedName = activeCharacterName;
+
+        // on signale à l'extérieur que le décor est totalement rembobiné
+        // pour ce switch de personnage
+        if (appState && appState.cameraSwitchPending) {
+          appState.decorClosingDoneForSwitch = true;
+        }
       } else {
         // cas "setActiveCharacter(null)" :
         // on n'a pas de nouveau perso à activer → on désactive tout
