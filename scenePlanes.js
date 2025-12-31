@@ -1,6 +1,7 @@
 // scenePlanes.js
 import * as THREE from 'three';
 
+
 // Loader de textures partagé
 const textureLoader = new THREE.TextureLoader();
 
@@ -77,8 +78,14 @@ const specialConfigsByName = {
     totalFrames: 1,
     fps: 0
   },
+  
   decor4: {
     sprite: 'images/droite.png',
+    totalFrames: 1,
+    fps: 0
+  },
+    rideau: {
+    sprite: 'images/rideau.png',
     totalFrames: 1,
     fps: 0
   }
@@ -216,6 +223,21 @@ export function updateScenePlanes(deltaMs) {
   });
 }
 
+export function setPlaneSpriteFrame(mesh, frameIndex) {
+  const instance = scenePlaneInstances.find((p) => p.mesh === mesh);
+  if (!instance || !instance.texture) return;
+
+  const total = instance.totalFrames || 1;
+  if (total <= 1) return;
+
+  const clamped = Math.max(0, Math.min(total - 1, Math.round(frameIndex)));
+  instance.currentFrame = clamped;
+
+  const uOffset = clamped / total;
+  instance.texture.offset.set(uOffset, 0);
+}
+
+
 // =========================
 //  API PUBLIQUE POUR LES INTERACTIONS
 // =========================
@@ -265,3 +287,4 @@ export function resetPlaneSprite(mesh) {
     instance.baseFps
   );
 }
+
