@@ -1,3 +1,5 @@
+// main.js
+
 import { initCore, updateCameraAndPlants } from './core.js';
 import {
   initCharacters,
@@ -15,7 +17,10 @@ import {
 } from './interactions.js';
 import { updateScenePlanes } from './scenePlanes.js';
 
-// état global simple
+// =========================
+//  ÉTAT GLOBAL
+// =========================
+
 const appState = {
   isStarted: false,
   hasShownUI: false,
@@ -25,12 +30,13 @@ const appState = {
   uiPanel: null,
   overlay: null,
 
-  // zoom perso
-  characterZoom: 0,           // valeur actuelle (0 = pas de zoom, 1 = zoom max)
-  characterZoomTarget: 0,     // valeur souhaitée
-  characterZoomAfterOut: false, // si true : après être revenu à 0, on repartira vers 1
-  cameraSwitchPending: false,
-  cameraSwitchTargetZ: null
+  // transition entre personnages (zoom / dézoom + rembobinage décor)
+  cameraSwitchPending: false,          // une transition est en cours
+  cameraSwitchTargetZ: null,           // z de zoom-in (zoomé)
+  cameraSwitchTargetCharacter: null,   // nom du prochain perso
+  cameraSwitchZoomOutDone: false,      // la caméra a fini de dézoomer
+  decorClosingDoneForSwitch: false,    // le décor a fini de se rembobiner pour ce switch
+  applySelectionForCamera: null        // sera rempli dans ui.js
 };
 
 // =========================
@@ -46,14 +52,14 @@ initCharacters(core.scene);
 // tas d’os + oiseau
 initBonesBird(core.scene);
 
-// UI : overlay + boutons + souris
+// UI : overlay + boutons + souris (et liaison avec core pour le zoom caméra)
 const canvas = core.renderer.domElement;
-initUI(appState, core.renderer.domElement, core);
+initUI(appState, canvas, core);
 
 // interactions décor (plantes de scene.glb)
 initInteractions(core, canvas);
 
-// drag sur le décor interactif
+// drag sur le décor interactif (plantes)
 canvas.addEventListener('pointerdown', handlePointerDown);
 window.addEventListener('pointermove', handlePointerMove);
 window.addEventListener('pointerup', handlePointerUp);
@@ -77,7 +83,7 @@ function animate(time) {
   // Caméra + mouvement "vent" sur certaines plantes
   updateCameraAndPlants(now, deltaMs, core, appState);
 
-  // Animation des personnages 2D (spritesheet)
+  // Animation des personnages 2D (spritesheets)
   updateCharacters(deltaMs, appState.isStarted);
 
   // Animation de l’oiseau sur le tas d’os
@@ -87,9 +93,33 @@ function animate(time) {
   updateScenePlanes(deltaMs);
 
   // Logique d’interactions décor (grasse1 / plante2, rembobinage, etc.)
-  updateInteractions(deltaMs);
+  updateInteractions(deltaMs, appState);
 
-  // Apparition du panneau UI quand le zoom est terminé
+  // =========================
+  //  COORDINATION DÉZOOM + REMBOBINAGE + SWITCH PERSO
+  // =========================
+  if (
+    appState.cameraSwitchPending &&
+    appState.cameraSwitchZoomOutDone &&
+    appState.decorClosingDoneForSwitch &&
+    appState.cameraSwitchTargetCharacter &&
+    typeof appState.applySelectionForCamera === 'function'
+  ) {
+    // 1) on applique enfin le nouveau personnage (personnages + décor)
+    appState.applySelectionForCamera(appState.cameraSwitchTargetCharacter);
+
+    // 2) on lance le zoom AVANT (caméra vers la position "zoomée")
+    core.targetPosition.z = appState.cameraSwitchTargetZ ?? core.zoomedTargetZ;
+
+    // 3) on reset tous les flags de transition
+    appState.cameraSwitchPending         = false;
+    appState.cameraSwitchTargetZ         = null;
+    appState.cameraSwitchTargetCharacter = null;
+    appState.cameraSwitchZoomOutDone     = false;
+    appState.decorClosingDoneForSwitch   = false;
+  }
+
+  // Apparition du panneau UI quand le zoom d’intro est terminé
   if (appState.isStarted && !appState.hasShownUI && appState.progress >= 1) {
     appState.hasShownUI = true;
     if (appState.uiPanel) {
@@ -113,3 +143,4 @@ window.addEventListener('resize', () => {
   core.camera.updateProjectionMatrix();
   core.renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
